@@ -28,3 +28,20 @@ zip([], _, Acc) -> lists:reverse(Acc);
 zip(_, [], Acc) -> lists:reverse(Acc);
 zip([Head1 | Rest1], [Head2 | Rest2], Acc) ->
   zip(Rest1, Rest2, [{Head1, Head2} | Acc]).
+
+qsort([]) -> [];
+qsort([Pivot | Rest]) ->
+  { Smaller, Larger } = partition(Rest, Pivot, [], []),
+  qsort(Smaller) ++ [ Pivot ] ++ qsort(Larger).
+
+partition([], _, Smaller, Larger) -> { Smaller, Larger };
+partition([Head | Tail], Pivot, Smaller, Larger) ->
+  if Head =< Pivot -> partition(Tail, Pivot, [ Head | Smaller ], Larger);
+     Head > Pivot  -> partition(Tail, Pivot, Smaller, [ Head | Larger ])
+  end.
+
+lc_qsort([]) -> [];
+lc_qsort([ Pivot | Rest]) ->
+  lc_qsort([Smaller || Smaller <- Rest, Smaller =< Pivot])
+  ++ [ Pivot ] ++
+  lc_qsort([Larger || Larger <- Rest, Larger > Pivot]).
