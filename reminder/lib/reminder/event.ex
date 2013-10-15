@@ -17,9 +17,8 @@ defmodule Reminder.Event do
     reference = :erlang.monitor(:process, pid)
     pid <- { self, reference, :cancel }
     receive do
-      { ^reference, :ok } -> :erlang.demonitor(reference, [ :flush ])
-      { 'DOWN', ^reference, :process, ^pid, _reason } -> :ok
-      Other -> IO.puts "Other = #{inspect Other}"
+      { ^reference, :ok } -> :erlang.demonitor(reference, [ :flush ]) && :ok
+      { :DOWN, ^reference, :process, ^pid, _reason } -> :ok
     end
   end
 
