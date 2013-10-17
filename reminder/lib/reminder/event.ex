@@ -1,16 +1,25 @@
 defmodule Reminder.Event do
   @timeout_limit 49 * 24 * 60 * 60
 
-  defrecord State, server: nil, name: nil, remaining_seconds: 0
+  defrecord State, server: nil, name: nil, to_go: 0
 
-  def start(name, delay), do: spawn(__MODULE__, :init, [ self, name, delay ])
-  def start_link(name, delay), do: spawn_link(__MODULE__, :init, [ self, name, delay ])
+  def start(name, date_time), do: spawn(__MODULE__, :init, [ self, name, date_time ])
+  def start_link(name, date_time), do: spawn_link(__MODULE__, :init, [ self, name, date_time ])
 
-  def init(server, name, delay) do
-    loop(State.new(server: server, name: name, remaining_seconds: normalize(delay)))
+  def init(server, name, date_time) do
+    loop(State.new(server: server, name: name, to_go: time_to_go(date_time)))
   end
+
   defp normalize(seconds) do
     [ rem(seconds, @timeout_limit) | List.duplicate(@timeout_limit, div(seconds, @timeout_limit)) ]
+  end
+
+  defp time_to_go(date_time = { { _, _, _ }, { _, _, _ } }) do
+    now = :calendar.local_time
+    to_go = :calendar.datetime_to_gregorian_seconds(date_time) -
+            :calendar.datetime_to_gregorian_seconds(now)
+    remaining_seconds = if to_go > 0, do: to_go, else: 0
+    normalize(remaining_seconds)
   end
 
   def cancel(pid) do
@@ -22,7 +31,7 @@ defmodule Reminder.Event do
     end
   end
 
-  defp loop(state = State[server: server, remaining_seconds: [ seconds | more_seconds ]]) do
+  defp loop(state = State[server: server, to_go: [ seconds | more_seconds ]]) do
     receive do
       { server, reference, :cancel } ->
         server <- { reference, :ok }
@@ -31,7 +40,7 @@ defmodule Reminder.Event do
         if more_seconds === [] do
           server <- { :done, state.name }
         else
-          loop(state[remaining_seconds: more_seconds])
+          loop(state[to_go: more_seconds])
         end
     end
   end
