@@ -1,7 +1,9 @@
 defmodule Reminder.Event do
   @timeout_limit 49 * 24 * 60 * 60
 
-  defrecord State, server: nil, name: nil, to_go: 0
+  defrecord State, server: nil,
+                   name: nil,
+                   to_go: 0
 
   def start(name, date_time), do: spawn(__MODULE__, :init, [ self, name, date_time ])
   def start_link(name, date_time), do: spawn_link(__MODULE__, :init, [ self, name, date_time ])
