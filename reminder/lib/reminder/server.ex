@@ -76,7 +76,7 @@ defmodule Reminder.Server do
         end
 
       { pid, msg_reference, { :cancel, name } } ->
-        events = case Dict.get(state.events, name) do
+        events = case Dict.fetch(state.events, name) do
           { :ok, event } ->
             Reminder.Event.cancel(event.pid)
             Dict.delete(state.events, name)
@@ -87,7 +87,7 @@ defmodule Reminder.Server do
         loop(state.update(events: events))
 
       { :done, name } ->
-        case Dict.get(state.events, name) do
+        case Dict.fetch(state.events, name) do
           { :ok, event } ->
             send_to_clients(state.clients, { :done, event.name, event.description })
             events = Dict.delete(state.events, name)
@@ -113,7 +113,7 @@ defmodule Reminder.Server do
   end
 
   defp send_to_clients(clients, message) do
-    Enum.each clients, fn _ref, pid ->
+    Enum.each clients, fn { _ref, pid } ->
       pid <- message
     end
   end
