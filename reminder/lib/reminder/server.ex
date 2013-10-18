@@ -45,6 +45,22 @@ defmodule Reminder.Server do
     end
   end
 
+  def cancel(name) do
+    reference = make_ref
+    __MODULE__ <- { self, reference, { :cancel, name } }
+    receive do
+      { ^reference, :ok } -> :ok
+    after 5000 -> { :error, :timeout }
+    end
+  end
+
+  def listen(delay) do
+    receive do
+      message = { :done, _name, _description } -> [ message | listen(0) ]
+    after delay * 1_000 -> []
+    end
+  end
+
   #
   # Server
   #
