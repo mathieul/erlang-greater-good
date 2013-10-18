@@ -7,6 +7,47 @@ defmodule Reminder.Server do
                    pid: nil,
                    date_time: { { 1970, 1, 1 }, { 0, 0, 0 } }
 
+  #
+  # Public API
+  #
+  def start do
+    :erlang.register(__MODULE__, pid = spawn(__MODULE__, :init, []))
+    pid
+  end
+
+  def start_link do
+    :erlang.register(__MODULE__, pid = spawn_link(__MODULE__, :init, []))
+    pid
+  end
+
+  def terminate do
+    __MODULE__ <- :shutdown
+  end
+
+  def subscribe(pid) do
+    reference = :erlang.monitor(:process, Process.whereis(__MODULE__))
+    __MODULE__ <- { self, reference, { :subscribe, pid }}
+    receive do
+      { ^reference, :ok } -> { :ok, reference }
+      { :DOWN, ^reference, :process, _pid, reason } -> { :error, reason }
+    after 500 ->
+      { :error, :timeout }
+    end
+  end
+
+  def add_event(name, description, date_time) do
+    reference = make_ref
+    __MODULE__ <- { self, reference, { :add, name, description, date_time } }
+    receive do
+      { ^reference, message } -> message
+    after 5000 ->
+      { :error, :timeout }
+    end
+  end
+
+  #
+  # Server
+  #
   def init do
     loop(State[events: ListDict.new, clients: ListDict.new])
   end
@@ -16,7 +57,8 @@ defmodule Reminder.Server do
       { pid, msg_reference, { :subscribe, client } } ->
         reference = :erlang.monitor(:process, client)
         pid <- { msg_reference, :ok }
-        loop(state[clients: Dict.put(state.client, reference, client)])
+        clients = Dict.put(state.clients, reference, client)
+        loop(state.update(clients: clients))
 
       { pid, msg_reference, { :add, name, description, date_time } } ->
         if Reminder.DateTime.valid?(date_time) do
@@ -26,7 +68,8 @@ defmodule Reminder.Server do
                              pid: event_pid,
                        date_time: date_time
           pid <- { msg_reference, :ok }
-          loop(state[events: Dict.put(state.events, name, event)])
+          events = Dict.put(state.events, name, event)
+          loop(state.update(events: events))
         else
           pid <- { msg_reference, { :error, :bad_date_time }}
           loop(state)
@@ -41,13 +84,14 @@ defmodule Reminder.Server do
             state.events
         end
         pid <- { msg_reference, :ok }
-        loop(state[events: events])
+        loop(state.update(events: events))
 
       { :done, name } ->
         case Dict.get(state.events, name) do
           { :ok, event } ->
             send_to_clients(state.clients, { :done, event.name, event.description })
-            loop(state[events: Dict.delete(state.events, name)])
+            events = Dict.delete(state.events, name)
+            loop(state.update(events: events))
           :error ->
             loop(state)
         end
@@ -56,7 +100,8 @@ defmodule Reminder.Server do
         exit(:shutdown)
 
       { :DOWN, msg_reference, :process, _pid, _reason } ->
-        loop(state[clients: Dict.delete(state.clients, msg_reference)])
+        clients = Dict.delete(state.clients, msg_reference)
+        loop(state.update(clients: clients))
 
       :code_change ->
         __MODULE__.loop(state)
