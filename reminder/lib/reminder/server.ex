@@ -32,13 +32,44 @@ defmodule Reminder.Server do
           loop(state)
         end
 
-      { pid, msg_reference, { :cancel, name } } -> raise "TODO"
-      :shutdown -> raise "TODO"
-      { :DOWN, msg_reference, :process, _pid, _reason } -> raise "TODO"
-      :code_change -> raise "TODO"
+      { pid, msg_reference, { :cancel, name } } ->
+        events = case Dict.get(state.events, name) do
+          { :ok, event } ->
+            Reminder.Event.cancel(event.pid)
+            Dict.delete(state.events, name)
+          :error ->
+            state.events
+        end
+        pid <- { msg_reference, :ok }
+        loop(state[events: events])
+
+      { :done, name } ->
+        case Dict.get(state.events, name) do
+          { :ok, event } ->
+            send_to_clients(state.clients, { :done, event.name, event.description })
+            loop(state[events: Dict.delete(state.events, name)])
+          :error ->
+            loop(state)
+        end
+
+      :shutdown ->
+        exit(:shutdown)
+
+      { :DOWN, msg_reference, :process, _pid, _reason } ->
+        loop(state[clients: Dict.delete(state.clients, msg_reference)])
+
+      :code_change ->
+        __MODULE__.loop(state)
+
       unknown ->
         IO.puts "Unknown message: #{inspect unknown}"
         loop(state)
+    end
+  end
+
+  defp send_to_clients(clients, message) do
+    Enum.each clients, fn _ref, pid ->
+      pid <- message
     end
   end
 end
