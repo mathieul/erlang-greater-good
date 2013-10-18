@@ -1,18 +1,24 @@
 defmodule Reminder.Supervisor do
-  use Supervisor.Behaviour
-
-  def start_link do
-    :supervisor.start_link(__MODULE__, [])
+  def start(module, arguments) do
+    spawn(__MODULE__, :init, [ { module, arguments } ])
   end
 
-  def init([]) do
-    children = [
-      # Define workers and child supervisors to be supervised
-      # worker(Reminder.Worker, [])
-    ]
+  def start_link(module, arguments) do
+    spawn_link(__MODULE__, :init, [ { module, arguments } ])
+  end
 
-    # See http://elixir-lang.org/docs/stable/Supervisor.Behaviour.html
-    # for other strategies and supported options
-    supervise(children, strategy: :one_for_one)
+  def init({ module, arguments }) do
+    Process.flag(:trap_exit, true)
+    loop({ module, :start_link, arguments })
+  end
+
+  def loop({ module, function, arguments }) do
+    pid = apply(module, function, arguments)
+    receive do
+      { :EXIT, _from, :shutdown } -> exit(:shutdown)
+      { :EXIT, pid, reason } ->
+        IO.puts "Process #{inspect pid} exited for reason #{inspect reason}"
+        loop({ module, function, arguments })
+    end
   end
 end
